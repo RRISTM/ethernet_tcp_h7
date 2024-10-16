@@ -22,7 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "lwip/tcp.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,7 +43,9 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+uint32_t connect=0;
+struct tcp_pcb *echoclient_pcb;
+uint8_t data[100] = {"Hello"};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -51,12 +53,93 @@ void SystemClock_Config(void);
 static void MPU_Config(void);
 static void MX_GPIO_Init(void);
 /* USER CODE BEGIN PFP */
-
+static err_t tcp_echoclient_sent(void *arg, struct tcp_pcb *tpcb, u16_t len);
+static err_t tcp_echoclient_connected(void *arg, struct tcp_pcb *tpcb, err_t err);
+static err_t tcp_echoclient_poll(void *arg, struct tcp_pcb *tpcb);
+static err_t tcp_echoclient_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/**
+  * @brief Function called when TCP connection established
+  * @param tpcb: pointer on the connection control block
+  * @param err: when connection correctly established err should be ERR_OK 
+  * @retval err_t: returned error 
+  */
+static err_t tcp_echoclient_connected(void *arg, struct tcp_pcb *tpcb, err_t err){
+  __NOP();
 
+  /* initialize LwIP tcp_sent callback function */
+  tcp_sent(tpcb, tcp_echoclient_sent);
+
+  /* initialize LwIP tcp_poll callback function */
+  tcp_poll(tpcb, tcp_echoclient_poll, 10);
+
+  /* initialize LwIP tcp_recv callback function */ 
+  tcp_recv(tpcb, tcp_echoclient_recv);
+  return ERR_OK;
+}
+
+/**
+  * @brief tcp_receiv callback
+  * @param arg: argument to be passed to receive callback 
+  * @param tpcb: tcp connection control block 
+  * @param err: receive error code 
+  * @retval err_t: returned error  
+  */
+static err_t tcp_echoclient_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err){
+  /* if we receive an empty tcp frame from server => close connection */
+  if (p == NULL)
+  {
+    /* remove callbacks */
+    tcp_recv(tpcb, NULL);
+    tcp_sent(tpcb, NULL);
+    tcp_poll(tpcb, NULL,0);
+  }
+  else{
+      {
+        struct pbuf *ptr;
+          err_t wr_err = ERR_OK;
+        /* enqueue data for transmission */
+        wr_err = tcp_write(tpcb, p->payload, p->tot_len, 1);
+      }
+         /* Acknowledge data reception */
+      tcp_recved(tpcb, p->tot_len); 
+      pbuf_free(p);
+  }
+  return ERR_OK;
+}
+
+/**
+  * @brief  This function implements the tcp_poll callback function
+  * @param  arg: pointer on argument passed to callback
+  * @param  tpcb: tcp connection control block
+  * @retval err_t: error code
+  */
+static err_t tcp_echoclient_poll(void *arg, struct tcp_pcb *tpcb){
+  /*sending data*/
+  {
+    struct pbuf *ptr;
+      err_t wr_err = ERR_OK;
+    /* enqueue data for transmission */
+    wr_err = tcp_write(tpcb, data, 10, 1);
+  }
+  return ERR_OK;
+}
+
+/**
+  * @brief  This function implements the tcp_sent LwIP callback (called when ACK
+  *         is received from remote host for sent data) 
+  * @param  arg: pointer on argument passed to callback
+  * @param  tcp_pcb: tcp connection control block
+  * @param  len: length of data sent 
+  * @retval err_t: returned error code
+  */
+static err_t tcp_echoclient_sent(void *arg, struct tcp_pcb *tpcb, u16_t len){
+  __NOP();
+  return ERR_OK;
+}
 /* USER CODE END 0 */
 
 /**
@@ -108,7 +191,20 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+
     MX_LWIP_Process();
+    if(connect){
+      connect=0;
+      /* create new tcp pcb */
+      echoclient_pcb = tcp_new();
+      if (echoclient_pcb != NULL)
+      {
+        ip_addr_t DestIPaddr;
+        IP4_ADDR( &DestIPaddr, 192, 168, 1, 1 );
+        /* connect to destination address/port */
+        tcp_connect(echoclient_pcb,&DestIPaddr,3999,tcp_echoclient_connected);
+      }
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
