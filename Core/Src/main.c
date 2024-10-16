@@ -44,7 +44,7 @@
 
 /* USER CODE BEGIN PV */
 uint32_t connect=0;
-struct tcp_pcb *echoclient_pcb;
+struct tcp_pcb *tcp_echoserver_pcb;
 uint8_t data[100] = {"Hello"};
 /* USER CODE END PV */
 
@@ -54,7 +54,7 @@ static void MPU_Config(void);
 static void MX_GPIO_Init(void);
 /* USER CODE BEGIN PFP */
 static err_t tcp_echoclient_sent(void *arg, struct tcp_pcb *tpcb, u16_t len);
-static err_t tcp_echoclient_connected(void *arg, struct tcp_pcb *tpcb, err_t err);
+static err_t tcp_echoserver_accept(void *arg, struct tcp_pcb *tpcb, err_t err);
 static err_t tcp_echoclient_poll(void *arg, struct tcp_pcb *tpcb);
 static err_t tcp_echoclient_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err);
 /* USER CODE END PFP */
@@ -67,7 +67,7 @@ static err_t tcp_echoclient_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p
   * @param err: when connection correctly established err should be ERR_OK 
   * @retval err_t: returned error 
   */
-static err_t tcp_echoclient_connected(void *arg, struct tcp_pcb *tpcb, err_t err){
+static err_t tcp_echoserver_accept(void *arg, struct tcp_pcb *tpcb, err_t err){
   __NOP();
 
   /* initialize LwIP tcp_sent callback function */
@@ -196,13 +196,23 @@ int main(void)
     if(connect){
       connect=0;
       /* create new tcp pcb */
-      echoclient_pcb = tcp_new();
-      if (echoclient_pcb != NULL)
+      tcp_echoserver_pcb = tcp_new();
+      if (tcp_echoserver_pcb != NULL)
       {
-        ip_addr_t DestIPaddr;
-        IP4_ADDR( &DestIPaddr, 192, 168, 1, 1 );
+        err_t err;
+        /* bind echo_pcb to port 7 (ECHO protocol) */
+        err = tcp_bind(tcp_echoserver_pcb, IP_ADDR_ANY, 3999);
+        if (err == ERR_OK)
+        {
+            /* start tcp listening for echo_pcb */
+          tcp_echoserver_pcb = tcp_listen(tcp_echoserver_pcb);
+          /* initialize LwIP tcp_accept callback function */
+          tcp_accept(tcp_echoserver_pcb, tcp_echoserver_accept);
+        }
+        // ip_addr_t DestIPaddr;
+        // IP4_ADDR( &DestIPaddr, 192, 168, 1, 1 );
         /* connect to destination address/port */
-        tcp_connect(echoclient_pcb,&DestIPaddr,3999,tcp_echoclient_connected);
+        // tcp_connect(echoclient_pcb,&DestIPaddr,3999,tcp_echoclient_connected);
       }
     }
     /* USER CODE END WHILE */
